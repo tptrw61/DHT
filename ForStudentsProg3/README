@@ -1,0 +1,12 @@
+CSc 422 Program 3 files for students
+
+Included are:
+
+command.c --- Example driver file.  Currently, the code you are given in dht.c only
+              supports END, so everything here is inactive besides the END command
+
+dht.{c,h} -- skeleton code that supports END only
+
+dht-helper.{c,h} -- helper code, e.g., list operations, that you will add
+
+Makefile -- do not modify
