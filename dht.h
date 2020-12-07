@@ -26,5 +26,8 @@
 #define REDIST_RM_PUT 15
 #define REDIST_RM_ACK 16
 
+#define RMBEFORE 17
+#define HELPRM 18
+
 void commandNode();
 
