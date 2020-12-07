@@ -146,7 +146,7 @@ void redistAddPut(int source) {
 	redistRank = args[2];
 	id = args[3];
 	if (key <= myStorageId) {
-		sendArgs[2] = {redistRank, id};
+		int sendArgs[2] = {redistRank, id};
 		putNode(&list, key, value);
 		MPI_Send(sendArgs, 2, MPI_INT, childRank, REDIST_ADD_ACK, MPI_COMM_WORLD);
 	} else {
@@ -173,7 +173,7 @@ void redistAddAck(int source) {
 		MPI_Send(args, 2, MPI_INT, childRank, REDIST_ADD_ACK, MPI_COMM_WORLD);
 	}
 }
-void remove(int source) {
+void removeF(int source) {
 	int id;
 	MPI_Recv(&id, 1, MPI_INT, source, REMOVE, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	if (myStorageId == id) {
@@ -279,7 +279,7 @@ void handleMessages() {
 				add(source);
 				break;
 			case REMOVE:
-				remove(source);
+				removeF(source);
 				break;
 			case PUT:
 				put(source);
