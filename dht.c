@@ -6,6 +6,16 @@
 #include "dht-helper.h"
 #include <assert.h>
 
+
+#define REDIST_RM_PUT 10
+#define RMBEFORE 11
+
+#define ADD_BEFORE 12
+#define ADDED 13
+#define ADD_MOVE 14
+#define ADD_ACK 15
+
+
 static int myStorageId, childRank, myRank, numProcesses;
 static List list;
 
@@ -81,96 +91,69 @@ void put(int source) {
 void add(int source) {
 	int args[2];
 	int rank, id;
-
 	MPI_Recv(args, 2, MPI_INT, source, ADD, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	rank = args[0];
 	id = args[1];
 	if (id < myStorageId) {
 		int sendArgs[3] = {rank, id, myRank};
-		MPI_Send(sendArgs, 3, MPI_INT, childRank, ADDBEFORE, MPI_COMM_WORLD);
+		MPI_Send(sendArgs, 3, MPI_INT, childRank, ADD_BEFORE, MPI_COMM_WORLD);
 	} else {
 		MPI_Send(args, 2, MPI_INT, childRank, ADD, MPI_COMM_WORLD);
 	}
 }
 void addBefore(int source) {
 	int args[3];
-	int rank, id, beforeRank;
-
-	MPI_Recv(args, 3, MPI_INT, source, ADDBEFORE, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	int rank, id, afterRank;
+	MPI_Recv(args, 3, MPI_INT, source, ADD_BEFORE, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	rank = args[0];
 	id = args[1];
-	beforeRank = args[2];
-	if (beforeRank == childRank) {
-		int sendArgs[2] = {id, childRank};
+	afterRank = args[2];
+	if (childRank == afterRank) {
+		int sendArgs[2] = {id, afterRank};
 		childRank = rank;
-		MPI_Send(sendArgs, 2, MPI_INT, childRank, HELPADD, MPI_COMM_WORLD);
+		MPI_Send(sendArgs, 2, MPI_INT, childRank, ADDED, MPI_COMM_WORLD);
 	} else {
-		MPI_Send(args, 3, MPI_INT, childRank, ADDBEFORE, MPI_COMM_WORLD);
+		MPI_Send(args, 3, MPI_INT, childRank, ADD_BEFORE, MPI_COMM_WORLD);
 	}
 }
-void helpAdd(int source) {
+void added(int source) {
 	int args[2];
-	MPI_Recv(args, 2, MPI_INT, source, HELPADD, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	//myStorageId, childRank
+	MPI_Recv(args, 2, MPI_INT, source, ADDED, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	myStorageId = args[0];
-	myRank = args[1];
-	MPI_Send(&myStorageId, 1, MPI_INT, childRank, REDIST_ADD, MPI_COMM_WORLD);
+	childRank = args[1];
+	int sendArgs[2] = {myRank, myStorageId};
+	MPI_Send(sendArgs, 2, MPI_INT, childRank, ADD_ACK, MPI_COMM_WORLD);
 }
-void redistAdd(int source) {
-	int id;
-	MPI_Recv(&id, 1, MPI_INT, source, REDIST_ADD, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+void addAck(int source) {
+	int args[2];
+	int rank, id;
+	MPI_Recv(args, 2, MPI_INT, source, ADD_ACK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	rank = args[0];
+	id = args[1];
 	if (list.head != NULL) {
 		if (list.head->key <= id) {
-			int args[4] = {list.head->key, list.head->value, myRank, id};
+			int sendArgs[3] = {rank, list.head->key, list.head->value};
 			removeNode(&list, list.head->key);
-			MPI_Send(args, 4, MPI_INT, childRank, REDIST_ADD_PUT_ROT, MPI_COMM_WORLD);
+			MPI_Send(sendArgs, 3, MPI_INT, childRank, ADD_MOVE, MPI_COMM_WORLD);
 			return;
 		}
 	}
-	MPI_Send(&id, 1, MPI_INT, childRank, ACK, MPI_COMM_WORLD);
+	MPI_Send(&rank, 1, MPI_INT, childRank, ACK, MPI_COMM_WORLD);
 }
-void redistAddPutRot(int source) {
-	int args[4];
-	MPI_Recv(args, 4, MPI_INT, source, REDIST_ADD_PUT_ROT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	if (myRank == 0) {
-		MPI_Send(args, 4, MPI_INT, childRank, REDIST_ADD_PUT, MPI_COMM_WORLD);
-	} else {
-		MPI_Send(args, 4, MPI_INT, childRank, REDIST_ADD_PUT_ROT, MPI_COMM_WORLD);
-	}
-}
-void redistAddPut(int source) {
-	int args[4];
-	int key, value, redistRank, id;
-	MPI_Recv(args, 4, MPI_INT, source, REDIST_ADD_PUT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	key = args[0];
-	value = args[1];
-	redistRank = args[2];
-	id = args[3];
-	if (key <= myStorageId) {
-		int sendArgs[2] = {redistRank, id};
+void addMove(int source) {
+	int args[3];
+	int rank, key, value;
+	MPI_Recv(args, 3, MPI_INT, source, ADD_MOVE, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	rank = args[0];
+	key = args[1];
+	value = args[2];
+	if (rank == myRank) {
 		putNode(&list, key, value);
-		MPI_Send(sendArgs, 2, MPI_INT, childRank, REDIST_ADD_ACK, MPI_COMM_WORLD);
+		int sendArgs[2] = {myRank, myStorageId};
+		MPI_Send(sendArgs, 2, MPI_INT, childRank, ADD_ACK, MPI_COMM_WORLD);
 	} else {
-		MPI_Send(args, 4, MPI_INT, childRank, REDIST_ADD_PUT, MPI_COMM_WORLD);
-	}
-}
-void redistAddAck(int source) {
-	int args[2];
-	int redistRank, id;
-	MPI_Recv(args, 2, MPI_INT, source, REDIST_ADD_ACK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	redistRank = args[0];
-	id = args[1];
-	if (myRank == redistRank) {
-		if (list.head != NULL) {
-			if (list.head->key <= id) {
-				int sendArgs[4] = {list.head->key, list.head->value, myRank, id};
-				removeNode(&list, list.head->key);
-				MPI_Send(sendArgs, 4, MPI_INT, childRank, REDIST_ADD_PUT_ROT, MPI_COMM_WORLD);
-				return;
-			}
-		}
-		MPI_Send(&id, 1, MPI_INT, childRank, ACK, MPI_COMM_WORLD);
-	} else {
-		MPI_Send(args, 2, MPI_INT, childRank, REDIST_ADD_ACK, MPI_COMM_WORLD);
+		MPI_Send(args, 3, MPI_INT, childRank, ADD_MOVE, MPI_COMM_WORLD);
 	}
 }
 void removeF(int source) {
@@ -238,15 +221,6 @@ void forwardAck(int source) {
 		MPI_Send(&ignore, 1, MPI_INT, childRank, ACK, MPI_COMM_WORLD);
 	}
 }
-void forwardReput(int source) {
-	int args[2];
-	MPI_Recv(args, 2, MPI_INT, source, REPUT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	if (myRank == 0) {
-		MPI_Send(args, 2, MPI_INT, childRank, PUT, MPI_COMM_WORLD);
-	} else {
-		MPI_Send(args, 2, MPI_INT, childRank, REPUT, MPI_COMM_WORLD);
-	}
-}
 
 // handleMessages repeatedly gets messages and performs the appropriate action
 void handleMessages() {
@@ -293,32 +267,23 @@ void handleMessages() {
 			case RETVAL:
 				forwardRetval(source);
 				break;
-			case HELPADD:
-				helpAdd(source);
-				break;
-			case ADDBEFORE:
-				addBefore(source);
-				break;
-			case REDIST_ADD:
-				redistAdd(source);
-				break;
-			case REDIST_ADD_PUT_ROT:
-				redistAddPutRot(source);
-				break;
-			case REDIST_ADD_PUT:
-				redistAddPut(source);
-				break;
-			case REDIST_ADD_ACK:
-				redistAddAck(source);
-				break;
 			case REDIST_RM_PUT:
 				redistRmPut(source);
 				break;
 			case RMBEFORE:
 				rmBefore(source);
 				break;
-			case REPUT:
-				forwardReput(source);
+			case ADD_BEFORE:
+				addBefore(source);
+				break;
+			case ADDED:
+				added(source);
+				break;
+			case ADD_ACK:
+				addAck(source);
+				break;
+			case ADD_MOVE:
+				addMove(source);
 				break;
 				// NOTE: you probably will want to add more cases here, e.g., to handle data redistribution
 			default:
