@@ -1,1 +1,1 @@
-for c in `ls PublicTestCases | grep 'command'` ; do  num=${c:7:2}; echo $num; cp PublicTestCases/$c command.c; make dht; mpiexec -np 8 dht >output; diff output PublicTestCases/output$num; echo next; read dummy; rm output command.c; done; cp ForStudentsProg3/command.c .
+for c in `ls PublicTestCases | grep 'command'` ; do  num=${c:7:2}; echo $num; cp PublicTestCases/$c command.c; make dht; mpiexec -np 8 ./dht >output; diff output PublicTestCases/output$num; echo next; read dummy; rm output command.c; done; cp ForStudentsProg3/command.c .
